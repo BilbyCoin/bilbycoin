@@ -11,7 +11,7 @@
 body{margin:0;background:#080b18;color:white;font-family:Arial,sans-serif}
 .app{max-width:440px;margin:auto;padding:22px 18px 35px}
 header{text-align:center;color:#eac45c;font-weight:bold;letter-spacing:3px}
-.logo{margin:25px auto 12px;width:120px;height:120px;border:3px solid #e8bd4c;border-radius:50%;display:grid;place-items:center;font-size:65px;background:linear-gradient(145deg,#29213c,#111629);box-shadow:0 0 30px #b18a3444}
+.logo{margin:18px auto 12px;width:160px;height:160px;display:block;object-fit:contain}
 h1{text-align:center;color:#f5cf69;margin:10px 0 5px}
 .tag{text-align:center;color:#a8a9bd;font-size:12px;letter-spacing:2px}
 .balance{margin-top:28px;padding:22px;border:1px solid #b18a4a;border-radius:18px;background:linear-gradient(135deg,#202039,#111629)}
@@ -41,7 +41,10 @@ footer{text-align:center;color:#77798f;font-size:12px;margin-top:28px}
 <header>BILBYCOIN</header>
 
 <div id="home">
-<div class="logo">🐾</div>
+<img class="logo"
+src="https://bilbycoin.github.io/bilbycoin/file_000000004bac8211a91b1c5b70616226.png"
+alt="BilbyCoin logo">
+
 <h1>BilbyCoin</h1>
 <div class="tag">CLAIM • REFER • GROW</div>
 
@@ -84,18 +87,14 @@ footer{text-align:center;color:#77798f;font-size:12px;margin-top:28px}
 <button class="back" onclick="showSection('home')">← Back to Home</button>
 <h2>👥 Invite Friends</h2>
 <p class="info">🚀 Invite friends and help grow the BilbyCoin community!</p>
-
 <p class="info"><b>Your personal referral link:</b></p>
 <div class="refbox" id="refLink">Opening inside Telegram...</div>
-
 <button class="action" onclick="copyReferral()">📋 Copy Referral Link</button>
 <button class="action" onclick="shareReferral()">📤 Share with Friends</button>
-
 <h3>🏆 Referral Rewards</h3>
 <p class="info">🥇 Level 1 — <span class="value">100 points</span></p>
 <p class="info">🥈 Level 2 — <span class="value">50 points</span></p>
 <p class="info">🥉 Level 3 — <span class="value">200 points</span></p>
-
 <p class="info">🎁 Total: 350 points distributed across three levels for each eligible new user.</p>
 <p class="notice">Each valid new user generates referral rewards only once. Self-referrals and duplicate referrals are not allowed. Rewards are subject to server verification.</p>
 </div>
