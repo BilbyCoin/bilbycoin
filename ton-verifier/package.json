@@ -1,0 +1,15 @@
+{
+  "name": "bilbycoin-ton-verifier",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@ton/core": "^0.63.0",
+    "@ton/crypto": "^3.3.0",
+    "@ton/ton": "^16.0.0",
+    "express": "^5.1.0"
+  }
+}
