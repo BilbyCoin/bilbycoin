@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script src='//libtl.com/sdk.js' data-zone='12160397' data-sdk='show_12160397'></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BilbyCoin</title>
@@ -91,6 +92,9 @@ alt="BilbyCoin logo">
 <button class="back" onclick="showSection('home')">← Back to Home</button>
 <h2>🎯 Tasks & Rewards</h2>
 <p class="info">Welcome to BilbyCoin Tasks!</p>
+<p class="info">Watch an eligible advertisement to earn BilbyCoin points.</p>
+<button class="action" id="monetagButton" onclick="watchRewardedAd()">🎬 Watch Ad — Earn 50 Points</button>
+<p class="notice" id="monetagStatus">Up to 3 eligible paid ad views per day. Points are credited only after server verification.</p>
 <p class="info">All available tasks and reward activities will be displayed here inside the Mini App.</p>
 <p class="info">Check this page regularly for new eligible tasks and campaigns.</p>
 <p class="info">🔥 Stay active and grow with BilbyCoin!</p>
@@ -180,6 +184,49 @@ if (tg) {
 
 function setWalletStatus(message) {
   document.getElementById("wallet-status").textContent = message;
+}
+
+function createMonetagYmid() {
+  const bytes = new Uint8Array(16);
+  if (window.crypto && window.crypto.getRandomValues) {
+    window.crypto.getRandomValues(bytes);
+    return Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+  }
+  return "bilby-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
+}
+
+async function watchRewardedAd() {
+  const button = document.getElementById("monetagButton");
+  const status = document.getElementById("monetagStatus");
+
+  if (!tg || !tg.initData) {
+    status.textContent = "Please open BilbyCoin inside Telegram to watch an ad.";
+    return;
+  }
+
+  if (typeof window.show_12160397 !== "function") {
+    status.textContent = "The ad service is loading. Please refresh and try again.";
+    return;
+  }
+
+  const ymid = createMonetagYmid();
+  button.disabled = true;
+  button.textContent = "⏳ Loading advertisement...";
+  status.textContent = "Please wait while the advertisement loads.";
+
+  try {
+    await window.show_12160397({
+      ymid: ymid,
+      requestVar: "bilbycoin_tasks_reward"
+    });
+    status.textContent = "Ad flow completed. Your 50 points will be added only after Monetag verifies a paid impression. Please refresh your balance shortly.";
+  } catch (error) {
+    console.error("Monetag ad error:", error);
+    status.textContent = "The advertisement could not be completed. Please try again later.";
+  } finally {
+    button.disabled = false;
+    button.textContent = "🎬 Watch Ad — Earn 50 Points";
+  }
 }
 
 async function claimDailyPoints() {
