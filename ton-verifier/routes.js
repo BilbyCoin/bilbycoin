@@ -1,6 +1,7 @@
 
 import express from "express";
 import crypto from "node:crypto";
+import { Address } from "@ton/core";
 import { pool } from "./database.js";
 import { verifyTelegramData } from "./telegram-auth.js";
 import { verifyTonProof } from "./ton-proof-service.js";
@@ -8,6 +9,7 @@ import { verifyTonProof } from "./ton-proof-service.js";
 const router = express.Router();
 
 const MAX_PROOF_AGE_SECONDS = 10 * 60;
+const EXPECTED_NETWORK = "-3";
 
 router.post("/payload", async (req, res) => {
   const user = verifyTelegramData(req.body?.initData);
@@ -18,10 +20,14 @@ router.post("/payload", async (req, res) => {
     });
   }
 
-  const client = await pool.connect();
+  let client;
+  let transactionStarted = false;
 
   try {
+    client = await pool.connect();
+
     await client.query("BEGIN");
+    transactionStarted = true;
 
     await client.query(
       `INSERT INTO public.users (user_id, username)
@@ -45,6 +51,7 @@ router.post("/payload", async (req, res) => {
     );
 
     await client.query("COMMIT");
+    transactionStarted = false;
 
     return res.json({
       payload,
@@ -52,7 +59,10 @@ router.post("/payload", async (req, res) => {
     });
 
   } catch (error) {
-    await client.query("ROLLBACK");
+    if (client && transactionStarted) {
+      await client.query("ROLLBACK").catch(() => {});
+    }
+
     console.error("Challenge creation error:", error.message);
 
     return res.status(500).json({
@@ -60,9 +70,10 @@ router.post("/payload", async (req, res) => {
     });
 
   } finally {
-    client.release();
+    if (client) client.release();
   }
 });
+
 
 router.post("/verify", async (req, res) => {
   const user = verifyTelegramData(req.body?.initData);
@@ -79,9 +90,10 @@ router.post("/verify", async (req, res) => {
   if (
     typeof address !== "string" ||
     address.length > 128 ||
-    network !== "-3" ||
+    network !== EXPECTED_NETWORK ||
     !proof ||
-    typeof proof !== "object"
+    typeof proof !== "object" ||
+    Array.isArray(proof)
   ) {
     return res.status(400).json({
       verified: false,
@@ -89,10 +101,25 @@ router.post("/verify", async (req, res) => {
     });
   }
 
-  const client = await pool.connect();
+  let canonicalAddress;
 
   try {
+    canonicalAddress = Address.parse(address).toRawString();
+  } catch {
+    return res.status(400).json({
+      verified: false,
+      error: "Invalid TON wallet address"
+    });
+  }
+
+  let client;
+  let transactionStarted = false;
+
+  try {
+    client = await pool.connect();
+
     await client.query("BEGIN");
+    transactionStarted = true;
 
     const challengeResult = await client.query(
       `SELECT challenge, expires_at
@@ -104,6 +131,7 @@ router.post("/verify", async (req, res) => {
 
     if (challengeResult.rowCount !== 1) {
       await client.query("ROLLBACK");
+      transactionStarted = false;
 
       return res.status(400).json({
         verified: false,
@@ -115,11 +143,13 @@ router.post("/verify", async (req, res) => {
 
     if (new Date(challenge.expires_at).getTime() <= Date.now()) {
       await client.query(
-        "DELETE FROM public.wallet_challenges WHERE user_id = $1",
+        `DELETE FROM public.wallet_challenges
+         WHERE user_id = $1`,
         [user.id]
       );
 
       await client.query("COMMIT");
+      transactionStarted = false;
 
       return res.status(400).json({
         verified: false,
@@ -129,7 +159,7 @@ router.post("/verify", async (req, res) => {
 
     const valid = await verifyTonProof(
       {
-        address,
+        address: canonicalAddress,
         network,
         public_key,
         proof
@@ -139,6 +169,7 @@ router.post("/verify", async (req, res) => {
 
     if (!valid) {
       await client.query("ROLLBACK");
+      transactionStarted = false;
 
       return res.status(400).json({
         verified: false,
@@ -158,11 +189,12 @@ router.post("/verify", async (req, res) => {
            OR wallet_address = $1
          )
        RETURNING user_id`,
-      [address, user.id]
+      [canonicalAddress, user.id]
     );
 
     if (updateResult.rowCount !== 1) {
       await client.query("ROLLBACK");
+      transactionStarted = false;
 
       return res.status(409).json({
         verified: false,
@@ -171,20 +203,25 @@ router.post("/verify", async (req, res) => {
     }
 
     await client.query(
-      "DELETE FROM public.wallet_challenges WHERE user_id = $1",
+      `DELETE FROM public.wallet_challenges
+       WHERE user_id = $1`,
       [user.id]
     );
 
     await client.query("COMMIT");
+    transactionStarted = false;
 
     return res.json({
       verified: true,
-      wallet_address: address,
+      wallet_address: canonicalAddress,
       message: "TON wallet ownership verified successfully."
     });
 
   } catch (error) {
-    await client.query("ROLLBACK");
+    if (client && transactionStarted) {
+      await client.query("ROLLBACK").catch(() => {});
+    }
+
     console.error("Wallet verification error:", error.message);
 
     return res.status(500).json({
@@ -193,7 +230,7 @@ router.post("/verify", async (req, res) => {
     });
 
   } finally {
-    client.release();
+    if (client) client.release();
   }
 });
 
