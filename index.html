@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BilbyCoin</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#080b18;color:white;font-family:Arial,sans-serif}
@@ -34,6 +35,8 @@ footer{text-align:center;color:#77798f;font-size:12px;margin-top:28px}
 .refbox{background:#080b18;border:1px solid #b18a4a;border-radius:12px;padding:14px;overflow-wrap:anywhere;color:#f5cf69;font-size:13px;line-height:1.6;margin:15px 0}
 .action{width:100%;padding:13px;border:1px solid #b18a4a;border-radius:10px;background:#29213c;color:#f5cf69;font-size:15px;font-weight:bold;margin:7px 0;cursor:pointer}
 .notice{font-size:12px;color:#9d9db0;line-height:1.6;margin-top:14px}
+#ton-connect{margin:16px 0;min-height:48px}
+.wallet-address{display:none;background:#080b18;border:1px solid #b18a4a;border-radius:12px;padding:14px;overflow-wrap:anywhere;color:#f5cf69;font-size:13px;line-height:1.6;margin-top:14px}
 </style>
 </head>
 <body>
@@ -111,6 +114,15 @@ alt="BilbyCoin logo">
 <p class="info">Total balance: <span class="value" id="walletBalance">Loading...</span></p>
 <p class="info">Today's points: <span class="value" id="walletDaily">0</span></p>
 <p class="info">Referral points: <span class="value" id="walletReferral">0</span></p>
+
+<h3>🔗 TON Crypto Wallet</h3>
+<p class="info">Connect your Tonkeeper wallet to prepare for possible future BILBY token campaigns.</p>
+
+<div id="ton-connect"></div>
+<div id="connected-address" class="wallet-address"></div>
+
+<p class="notice">Your private keys and recovery phrase stay in your wallet. Connecting does not transfer tokens or guarantee future rewards. Never share your recovery phrase.</p>
+
 <p class="notice">BilbyCoin points are virtual community points and currently have no cash value. They cannot be transferred or sold.</p>
 </div>
 
@@ -130,7 +142,9 @@ alt="BilbyCoin logo">
 <script>
 const tg = window.Telegram && window.Telegram.WebApp;
 const BOT_USERNAME = "Bilbycoinrewardsbot";
+const MANIFEST_URL = "https://bilbycoin.github.io/bilbycoin/tonconnect-manifest.json";
 let referralLink = "";
+let tonConnectUI = null;
 
 if(tg){
   tg.ready();
@@ -259,8 +273,48 @@ async function loadWallet(){
   }
 }
 
+function setupTonConnect(){
+  const addressBox = document.getElementById("connected-address");
+
+  if(!window.TON_CONNECT_UI || !window.TON_CONNECT_UI.TonConnectUI){
+    addressBox.style.display = "block";
+    addressBox.textContent =
+      "Wallet connection library did not load. Please refresh and try again.";
+    return;
+  }
+
+  try{
+    tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+      manifestUrl: MANIFEST_URL,
+      buttonRootId: "ton-connect"
+    });
+
+    tonConnectUI.uiOptions = {
+      twaReturnUrl: "https://t.me/Bilbycoinrewardsbot"
+    };
+
+    tonConnectUI.onStatusChange(wallet=>{
+      if(wallet && wallet.account && wallet.account.address){
+        const address = wallet.account.address;
+        addressBox.style.display = "block";
+        addressBox.textContent =
+          "Connected wallet address:\n" + address;
+      }else{
+        addressBox.style.display = "none";
+        addressBox.textContent = "";
+      }
+    });
+  }catch(error){
+    addressBox.style.display = "block";
+    addressBox.textContent =
+      "Could not initialize wallet connection. Please refresh and try again.";
+    console.error("TON Connect setup error:", error);
+  }
+}
+
 setupReferral();
 loadWallet();
+setupTonConnect();
 </script>
 </body>
 </html>
