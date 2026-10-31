@@ -37,7 +37,6 @@ export function verifyTelegramData(initData) {
     }
 
     delete data.hash;
-    delete data.signature;
 
     const checkString = Object.keys(data)
       .sort()
