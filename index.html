@@ -5,8 +5,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BilbyCoin</title>
+
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#080b18;color:white;font-family:Arial,sans-serif}
@@ -37,13 +39,17 @@ footer{text-align:center;color:#77798f;font-size:12px;margin-top:28px}
 .notice{font-size:12px;color:#9d9db0;line-height:1.6;margin-top:14px}
 #ton-connect{margin:16px 0;min-height:48px}
 .wallet-address{display:none;background:#080b18;border:1px solid #b18a4a;border-radius:12px;padding:14px;overflow-wrap:anywhere;color:#f5cf69;font-size:13px;line-height:1.6;margin-top:14px}
+.wallet-status{font-size:13px;line-height:1.6;color:#c4c4d2;margin-top:12px;overflow-wrap:anywhere}
 </style>
 </head>
+
 <body>
 <div class="app">
+
 <header>BILBYCOIN</header>
 
 <div id="home">
+
 <img class="logo"
 src="https://bilbycoin.github.io/bilbycoin/file_000000004bac8211a91b1c5b70616226.png"
 alt="BilbyCoin logo">
@@ -54,11 +60,13 @@ alt="BilbyCoin logo">
 <div class="balance">
 <div class="small">TOTAL ACCUMULATED BALANCE</div>
 <div class="amount" id="balance">Loading...</div>
+
 <div class="stats">
 <div class="stat">
 <div class="small">Today's Points</div>
 <strong id="daily">0</strong>
 </div>
+
 <div class="stat">
 <div class="small">Referral Points</div>
 <strong id="referrals">0</strong>
@@ -67,6 +75,7 @@ alt="BilbyCoin logo">
 </div>
 
 <h3>Explore BilbyCoin</h3>
+
 <div class="menu">
 <div class="item" onclick="showSection('home')"><span>🏠</span>Home</div>
 <div class="item" onclick="showSection('tasks')"><span>🎯</span>Tasks</div>
@@ -75,6 +84,7 @@ alt="BilbyCoin logo">
 <div class="item" onclick="showSection('wallet')"><span>👛</span>Wallet</div>
 <div class="item" onclick="showSection('airdrops')"><span>🪂</span>Airdrops</div>
 </div>
+
 </div>
 
 <div class="page" id="tasks">
@@ -91,9 +101,12 @@ alt="BilbyCoin logo">
 <h2>👥 Invite Friends</h2>
 <p class="info">🚀 Invite friends and help grow the BilbyCoin community!</p>
 <p class="info"><b>Your personal referral link:</b></p>
+
 <div class="refbox" id="refLink">Opening inside Telegram...</div>
+
 <button class="action" onclick="copyReferral()">📋 Copy Referral Link</button>
 <button class="action" onclick="shareReferral()">📤 Share with Friends</button>
+
 <h3>🏆 Referral Rewards</h3>
 <p class="info">🥇 Level 1 — <span class="value">100 points</span></p>
 <p class="info">🥈 Level 2 — <span class="value">50 points</span></p>
@@ -110,18 +123,28 @@ alt="BilbyCoin logo">
 
 <div class="page" id="wallet">
 <button class="back" onclick="showSection('home')">← Back to Home</button>
+
 <h2>👛 My Wallet</h2>
+
 <p class="info">Total balance: <span class="value" id="walletBalance">Loading...</span></p>
 <p class="info">Today's points: <span class="value" id="walletDaily">0</span></p>
 <p class="info">Referral points: <span class="value" id="walletReferral">0</span></p>
 
 <h3>🔗 TON Crypto Wallet</h3>
+
 <p class="info">Connect your Tonkeeper wallet to prepare for possible future BILBY token campaigns.</p>
 
 <div id="ton-connect"></div>
+
 <div id="connected-address" class="wallet-address"></div>
 
-<p class="notice">Your private keys and recovery phrase stay in your wallet. Connecting does not transfer tokens or guarantee future rewards. Never share your recovery phrase.</p>
+<div id="wallet-status" class="wallet-status">
+Wallet connection status will appear here.
+</div>
+
+<p class="notice">Your private keys and recovery phrase stay in your wallet. BilbyCoin never asks for your recovery phrase.</p>
+
+<p class="notice">Connecting a wallet does not transfer tokens or guarantee future rewards. A connected address is not yet proof of wallet ownership.</p>
 
 <p class="notice">BilbyCoin points are virtual community points and currently have no cash value. They cannot be transferred or sold.</p>
 </div>
@@ -137,21 +160,33 @@ alt="BilbyCoin logo">
 </div>
 
 <footer>BilbyCoin • Claim • Refer • Grow</footer>
+
 </div>
 
 <script>
 const tg = window.Telegram && window.Telegram.WebApp;
+
 const BOT_USERNAME = "Bilbycoinrewardsbot";
-const MANIFEST_URL = "https://bilbycoin.github.io/bilbycoin/tonconnect-manifest.json";
+
+const API_URL = "https://bilbycoin-api.onrender.com";
+
+const MANIFEST_URL =
+"https://bilbycoin.github.io/bilbycoin/tonconnect-manifest.json";
+
 let referralLink = "";
 let tonConnectUI = null;
+let hadConnectedWallet = false;
+let lastSavedAddress = "";
+
 
 if(tg){
   tg.ready();
   tg.expand();
 }
 
+
 function showSection(name){
+
   document.getElementById("home").style.display =
     name === "home" ? "block" : "none";
 
@@ -164,15 +199,21 @@ function showSection(name){
     if(selected) selected.style.display = "block";
   }
 
-  if(name === "wallet") loadWallet();
+  if(name === "wallet"){
+    loadWallet();
+  }
 }
 
+
 function setupReferral(){
+
   const user = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
 
   if(!user || !user.id){
+
     document.getElementById("refLink").textContent =
       "Please open BilbyCoin inside Telegram to generate your personal link.";
+
     return;
   }
 
@@ -182,30 +223,47 @@ function setupReferral(){
   document.getElementById("refLink").textContent = referralLink;
 }
 
+
 async function copyReferral(){
+
   if(!referralLink){
     alert("Open BilbyCoin inside Telegram first.");
     return;
   }
 
   try{
+
     if(navigator.clipboard && navigator.clipboard.writeText){
+
       await navigator.clipboard.writeText(referralLink);
+
     }else{
+
       const input = document.createElement("textarea");
+
       input.value = referralLink;
+
       document.body.appendChild(input);
+
       input.select();
+
       document.execCommand("copy");
+
       input.remove();
     }
+
     alert("Referral link copied!");
+
   }catch(error){
+
     alert("Could not copy. Please copy the link manually.");
+
   }
 }
 
+
 function shareReferral(){
+
   if(!referralLink){
     alert("Open BilbyCoin inside Telegram first.");
     return;
@@ -226,26 +284,36 @@ function shareReferral(){
   }
 }
 
+
 async function loadWallet(){
+
   if(!tg || !tg.initData){
+
     document.getElementById("balance").textContent =
       "Open inside Telegram";
+
     document.getElementById("walletBalance").textContent =
       "Open inside Telegram";
+
     return;
   }
 
   try{
+
     const response = await fetch(
-      "https://bilbycoin-api.onrender.com/api/wallet",
+      API_URL + "/api/wallet",
       {
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({initData:tg.initData})
+        body:JSON.stringify({
+          initData:tg.initData
+        })
       }
     );
 
-    if(!response.ok) throw new Error("Wallet request failed");
+    if(!response.ok){
+      throw new Error("Wallet request failed");
+    }
 
     const data = await response.json();
 
@@ -265,56 +333,243 @@ async function loadWallet(){
     document.getElementById("referrals").textContent = referral;
     document.getElementById("walletReferral").textContent = referral;
 
+    if(data.wallet_address){
+      document.getElementById("wallet-status").textContent =
+        "A wallet address is saved in your BilbyCoin account.";
+    }
+
   }catch(error){
+
     document.getElementById("balance").textContent =
       "Could not load";
+
     document.getElementById("walletBalance").textContent =
       "Could not load";
+
   }
 }
 
-function setupTonConnect(){
-  const addressBox = document.getElementById("connected-address");
 
-  if(!window.TON_CONNECT_UI || !window.TON_CONNECT_UI.TonConnectUI){
-    addressBox.style.display = "block";
-    addressBox.textContent =
-      "Wallet connection library did not load. Please refresh and try again.";
+function setWalletStatus(message){
+  document.getElementById("wallet-status").textContent = message;
+}
+
+
+function showConnectedAddress(address){
+
+  const addressBox =
+    document.getElementById("connected-address");
+
+  addressBox.style.display = "block";
+
+  addressBox.textContent =
+    "Connected TON wallet address:\n" + address;
+}
+
+
+async function saveWalletAddress(address){
+
+  if(!tg || !tg.initData){
+    setWalletStatus("Please open BilbyCoin inside Telegram.");
+    return false;
+  }
+
+  setWalletStatus("Saving your wallet address to BilbyCoin...");
+
+  try{
+
+    const response = await fetch(
+      API_URL + "/api/connect-wallet",
+      {
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json"
+        },
+        body:JSON.stringify({
+          initData:tg.initData,
+          address:address
+        })
+      }
+    );
+
+    const data = await response.json();
+
+    if(!response.ok){
+
+      setWalletStatus(
+        data.error || "Could not save wallet address."
+      );
+
+      return false;
+    }
+
+    lastSavedAddress = address;
+
+    setWalletStatus(
+      "✅ Wallet address saved to your BilbyCoin account."
+    );
+
+    return true;
+
+  }catch(error){
+
+    console.error("Wallet saving error:",error);
+
+    setWalletStatus(
+      "Connection problem. Your wallet is connected, but saving failed."
+    );
+
+    return false;
+  }
+}
+
+
+async function disconnectSavedWallet(){
+
+  if(!tg || !tg.initData){
     return;
   }
 
   try{
-    tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-      manifestUrl: MANIFEST_URL,
-      buttonRootId: "ton-connect"
-    });
 
-    tonConnectUI.uiOptions = {
-      twaReturnUrl: "https://t.me/Bilbycoinrewardsbot"
-    };
-
-    tonConnectUI.onStatusChange(wallet=>{
-      if(wallet && wallet.account && wallet.account.address){
-        const address = wallet.account.address;
-        addressBox.style.display = "block";
-        addressBox.textContent =
-          "Connected wallet address:\n" + address;
-      }else{
-        addressBox.style.display = "none";
-        addressBox.textContent = "";
+    const response = await fetch(
+      API_URL + "/api/disconnect-wallet",
+      {
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json"
+        },
+        body:JSON.stringify({
+          initData:tg.initData
+        })
       }
-    });
+    );
+
+    const data = await response.json();
+
+    if(!response.ok){
+      throw new Error(data.error || "Disconnect failed");
+    }
+
+    lastSavedAddress = "";
+
+    setWalletStatus(
+      "Wallet disconnected from your BilbyCoin account."
+    );
+
   }catch(error){
-    addressBox.style.display = "block";
-    addressBox.textContent =
-      "Could not initialize wallet connection. Please refresh and try again.";
-    console.error("TON Connect setup error:", error);
+
+    console.error("Wallet disconnect error:",error);
+
+    setWalletStatus(
+      "Wallet disconnected in Tonkeeper, but updating your BilbyCoin account failed. Please reconnect and try again."
+    );
+
   }
 }
 
+
+async function handleWalletStatus(wallet){
+
+  if(wallet && wallet.account && wallet.account.address){
+
+    const address = wallet.account.address;
+
+    hadConnectedWallet = true;
+
+    showConnectedAddress(address);
+
+    if(address !== lastSavedAddress){
+
+      await saveWalletAddress(address);
+
+    }
+
+  }else{
+
+    document.getElementById("connected-address").style.display =
+      "none";
+
+    document.getElementById("connected-address").textContent = "";
+
+    if(hadConnectedWallet){
+
+      hadConnectedWallet = false;
+
+      await disconnectSavedWallet();
+
+    }else{
+
+      setWalletStatus("No TON wallet currently connected.");
+
+    }
+
+  }
+}
+
+
+function setupTonConnect(){
+
+  const addressBox =
+    document.getElementById("connected-address");
+
+  if(
+    !window.TON_CONNECT_UI ||
+    !window.TON_CONNECT_UI.TonConnectUI
+  ){
+
+    addressBox.style.display = "block";
+
+    addressBox.textContent =
+      "Wallet connection library did not load. Please refresh and try again.";
+
+    setWalletStatus("TON Connect is unavailable.");
+
+    return;
+  }
+
+  try{
+
+    tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+
+      manifestUrl:MANIFEST_URL,
+
+      buttonRootId:"ton-connect",
+
+      actionsConfiguration:{
+        twaReturnUrl:"https://t.me/Bilbycoinrewardsbot"
+      }
+
+    });
+
+    tonConnectUI.onStatusChange(wallet=>{
+
+      handleWalletStatus(wallet);
+
+    });
+
+  }catch(error){
+
+    addressBox.style.display = "block";
+
+    addressBox.textContent =
+      "Could not initialize wallet connection. Please refresh and try again.";
+
+    setWalletStatus("TON Connect initialization failed.");
+
+    console.error("TON Connect setup error:",error);
+
+  }
+}
+
+
 setupReferral();
+
 loadWallet();
+
 setupTonConnect();
+
 </script>
+
 </body>
 </html>
