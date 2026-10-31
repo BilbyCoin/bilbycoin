@@ -374,6 +374,103 @@ def disconnect_wallet():
         }), 500
 
 
+@app.route("/api/monetag-postback", methods=["GET"])
+def monetag_postback():
+    supplied_secret = request.args.get("secret", "")
+    expected_secret = os.getenv("MONETAG_POSTBACK_SECRET", "")
+
+    if not expected_secret or not supplied_secret or not hmac.compare_digest(supplied_secret, expected_secret):
+        return "", 403
+
+    ymid = request.args.get("ymid", "").strip()
+    event_type = request.args.get("event_type", "").strip()
+    reward_event_type = request.args.get("reward_event_type", "").strip()
+    zone_id = request.args.get("zone_id", "").strip()
+    telegram_id = request.args.get("telegram_id", "").strip()
+    estimated_price = request.args.get("estimated_price", "0").strip()
+    sub_zone_id = request.args.get("sub_zone_id", "").strip()
+
+    # Only a paid impression can earn points. Clicks and unpaid events do not.
+    if not ymid or len(ymid) > 200:
+        return "", 400
+    if event_type != "impression" or reward_event_type != "valued":
+        return "", 200
+    if not zone_id.isdigit() or not telegram_id.isdigit():
+        return "", 200
+
+    try:
+        user_id = int(telegram_id)
+        zone_number = int(zone_id)
+        price = float(estimated_price)
+        if user_id <= 0 or zone_number <= 0 or price < 0 or price > 1000:
+            return "", 400
+        sub_zone_number = int(sub_zone_id) if sub_zone_id.isdigit() else None
+    except (TypeError, ValueError):
+        return "", 400
+
+    database_url = get_database_url()
+    if not database_url:
+        app.logger.error("Monetag postback received but DATABASE_URL is missing")
+        return "", 500
+
+    try:
+        with psycopg.connect(database_url, sslmode="require") as conn:
+            with conn.cursor() as cur:
+                # Serialize reward checks per user so concurrent callbacks cannot
+                # exceed the daily limit.
+                cur.execute("SELECT pg_advisory_xact_lock(%s)", (user_id,))
+
+                cur.execute(
+                    "SELECT 1 FROM public.users WHERE user_id = %s",
+                    (user_id,)
+                )
+                if not cur.fetchone():
+                    return "", 200
+
+                cur.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM public.monetag_events
+                    WHERE user_id = %s
+                      AND created_at >= date_trunc('day', NOW())
+                    """,
+                    (user_id,)
+                )
+                today_count = cur.fetchone()[0]
+                if today_count >= 3:
+                    return "", 200
+
+                cur.execute(
+                    """
+                    INSERT INTO public.monetag_events
+                        (ymid, user_id, zone_id, sub_zone_id, event_type,
+                         reward_event_type, estimated_price, credited_points)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, 50)
+                    ON CONFLICT (ymid) DO NOTHING
+                    RETURNING ymid
+                    """,
+                    (ymid, user_id, zone_number, sub_zone_number,
+                     event_type, reward_event_type, price)
+                )
+                inserted = cur.fetchone()
+
+                if inserted:
+                    cur.execute(
+                        """
+                        UPDATE public.users
+                        SET balance = COALESCE(balance, 0) + 50
+                        WHERE user_id = %s
+                        """,
+                        (user_id,)
+                    )
+
+        return "", 200
+
+    except Exception:
+        app.logger.exception("Monetag postback processing failed")
+        return "", 500
+
+
 if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
