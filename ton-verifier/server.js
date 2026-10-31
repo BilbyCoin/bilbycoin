@@ -6,7 +6,7 @@ import pg from "pg";
 
 const app = express();
 
-app.use(express.json());
+app.use(express.json());import tonProofRoutes from "./routes.js";
 
 app.use(cors({
   origin: "https://bilbycoin.github.io",
