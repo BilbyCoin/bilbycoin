@@ -7,11 +7,11 @@ import {
   WalletContractV2R2,
   WalletContractV3R1,
   WalletContractV3R2,
-  WalletContractV4,
+  WalletContractV4 as WalletContractV4R2,
   WalletContractV5R1
 } from "@ton/ton";
 
-import { Buffer } from "node:buffer";
+import { Buffer } from "buffer";
 
 function loadV1(cs) {
   cs.loadUint(32);
@@ -50,7 +50,7 @@ const knownWallets = [
   { contract: WalletContractV2R2, load: loadV2 },
   { contract: WalletContractV3R1, load: loadV3 },
   { contract: WalletContractV3R2, load: loadV3 },
-  { contract: WalletContractV4, load: loadV4 },
+  { contract: WalletContractV4R2, load: loadV4 },
   { contract: WalletContractV5R1, load: loadV5 }
 ].map(({ contract, load }) => ({
   code: contract.create({
@@ -63,13 +63,13 @@ const knownWallets = [
 export function tryExtractPublicKey(stateInit) {
   if (!stateInit.code || !stateInit.data) return null;
 
-  for (const { code, load } of knownWallets) {
-    try {
-      if (code.equals(stateInit.code)) {
-        return load(stateInit.data.beginParse());
+  for (const wallet of knownWallets) {
+    if (wallet.code.equals(stateInit.code)) {
+      try {
+        return wallet.load(stateInit.data.beginParse());
+      } catch {
+        return null;
       }
-    } catch {
-      // Reject unsupported wallet layouts.
     }
   }
 
