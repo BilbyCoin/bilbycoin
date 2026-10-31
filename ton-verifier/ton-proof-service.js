@@ -14,19 +14,35 @@ import { tryExtractPublicKey } from "./wrappers/wallet-public-key.js";
 const EXPECTED_DOMAIN = "bilbycoin.github.io";
 const EXPECTED_NETWORK = "-3";
 const MAX_PROOF_AGE = 10 * 60;
+const MAX_PAYLOAD_BYTES = 128;
 
 function validBase64(value) {
-  if (typeof value !== "string" || !value || value.length > 10000) {
+  if (
+    typeof value !== "string" ||
+    !value ||
+    value.length > 10000 ||
+    value.length % 4 !== 0 ||
+    !/^[A-Za-z0-9+/]+={0,2}$/.test(value)
+  ) {
     return false;
   }
 
-  return /^[A-Za-z0-9+/]+={0,2}$/.test(value) &&
-    value.length % 4 === 0;
+  try {
+    const decoded = Buffer.from(value, "base64");
+    return decoded.toString("base64") === value;
+  } catch {
+    return false;
+  }
 }
 
 export async function verifyTonProof(body, expectedPayload) {
   try {
-    if (!body || body.network !== EXPECTED_NETWORK) {
+    if (
+      !body ||
+      body.network !== EXPECTED_NETWORK ||
+      typeof body.address !== "string" ||
+      typeof expectedPayload !== "string"
+    ) {
       return false;
     }
 
@@ -34,17 +50,17 @@ export async function verifyTonProof(body, expectedPayload) {
 
     if (
       !proof ||
-      typeof expectedPayload !== "string" ||
-      proof.payload !== expectedPayload ||
+      typeof proof !== "object" ||
+      Array.isArray(proof) ||
       typeof proof.payload !== "string" ||
       !proof.payload ||
-      Buffer.byteLength(proof.payload, "utf8") > 128
+      proof.payload !== expectedPayload ||
+      Buffer.byteLength(proof.payload, "utf8") > MAX_PAYLOAD_BYTES
     ) {
       return false;
     }
 
     if (
-      !proof.state_init ||
       !validBase64(proof.state_init) ||
       !validBase64(proof.signature)
     ) {
@@ -53,7 +69,10 @@ export async function verifyTonProof(body, expectedPayload) {
 
     const timestamp = Number(proof.timestamp);
 
-    if (!Number.isSafeInteger(timestamp) || timestamp < 0) {
+    if (
+      !Number.isSafeInteger(timestamp) ||
+      timestamp <= 0
+    ) {
       return false;
     }
 
@@ -63,13 +82,20 @@ export async function verifyTonProof(body, expectedPayload) {
       return false;
     }
 
-    if (proof.domain?.value !== EXPECTED_DOMAIN) {
+    if (
+      !proof.domain ||
+      proof.domain.value !== EXPECTED_DOMAIN
+    ) {
       return false;
     }
 
-    const domainBytes = Buffer.from(proof.domain.value, "utf8");
+    const domainBytes = Buffer.from(
+      proof.domain.value,
+      "utf8"
+    );
 
     if (
+      !Number.isSafeInteger(proof.domain.lengthBytes) ||
       proof.domain.lengthBytes !== domainBytes.length ||
       domainBytes.length > 128
     ) {
@@ -105,12 +131,17 @@ export async function verifyTonProof(body, expectedPayload) {
         return false;
       }
 
-      if (!publicKey.equals(Buffer.from(body.public_key, "hex"))) {
+      const suppliedKey = Buffer.from(body.public_key, "hex");
+
+      if (!publicKey.equals(suppliedKey)) {
         return false;
       }
     }
 
-    const signature = Buffer.from(proof.signature, "base64");
+    const signature = Buffer.from(
+      proof.signature,
+      "base64"
+    );
 
     if (signature.length !== 64) {
       return false;
@@ -135,7 +166,9 @@ export async function verifyTonProof(body, expectedPayload) {
       Buffer.from(proof.payload, "utf8")
     ]);
 
-    const messageHash = Buffer.from(await sha256(message));
+    const messageHash = Buffer.from(
+      await sha256(message)
+    );
 
     const fullMessage = Buffer.concat([
       Buffer.from([0xff, 0xff]),
@@ -143,7 +176,9 @@ export async function verifyTonProof(body, expectedPayload) {
       messageHash
     ]);
 
-    const digest = Buffer.from(await sha256(fullMessage));
+    const digest = Buffer.from(
+      await sha256(fullMessage)
+    );
 
     return domainSignVerify({
       data: digest,
