@@ -72,8 +72,8 @@ alt="BilbyCoin logo">
 </div>
 </div>
 
-<button class="action" onclick="showClaimStatus()">🎁 Claim Daily Points</button>
-<p class="notice" id="claimStatus">Daily claim: 100 points after a verified rewarded ad. Claims will activate when the ad provider and server verification are connected.</p>
+<button class="action" id="claimButton" onclick="claimDailyPoints()">🎁 Claim 100 Daily Points</button>
+<p class="notice" id="claimStatus">Claim 100 points once every 24 hours. No advertisement is required.</p>
 
 <h3>Explore BilbyCoin</h3>
 
@@ -184,8 +184,45 @@ function setWalletStatus(message) {
   document.getElementById("wallet-status").textContent = message;
 }
 
-function showClaimStatus() {
-  alert("Daily claims are not active yet. The 100-point reward will be available after BilbyCoin connects a rewarded-ad provider and verifies completed ads on the server. No points have been added.");
+async function claimDailyPoints() {
+  const button = document.getElementById("claimButton");
+  const status = document.getElementById("claimStatus");
+
+  if (!tg || !tg.initData) {
+    status.textContent = "Please open BilbyCoin inside Telegram to claim points.";
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "⏳ Processing claim...";
+  status.textContent = "Checking your daily claim...";
+
+  try {
+    const response = await fetch(API_URL + "/api/claim-daily", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({initData: tg.initData})
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      if (data.next_claim_at) {
+        status.textContent = "You have already claimed today. Next claim: " + new Date(data.next_claim_at).toLocaleString();
+      } else {
+        status.textContent = data.error || "Claim could not be completed. Please try again later.";
+      }
+      return;
+    }
+
+    status.textContent = "🎉 " + data.message;
+    await loadWallet();
+  } catch (error) {
+    console.error("Daily claim error:", error);
+    status.textContent = "Connection problem. Please try again.";
+  } finally {
+    button.disabled = false;
+    button.textContent = "🎁 Claim 100 Daily Points";
+  }
 }
 
 function showSection(name) {
