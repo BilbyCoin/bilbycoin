@@ -72,6 +72,9 @@ alt="BilbyCoin logo">
 </div>
 </div>
 
+<button class="action" onclick="showClaimStatus()">🎁 Claim Daily Points</button>
+<p class="notice" id="claimStatus">Daily claim: 100 points after a verified rewarded ad. Claims will activate when the ad provider and server verification are connected.</p>
+
 <h3>Explore BilbyCoin</h3>
 
 <div class="menu">
@@ -179,6 +182,10 @@ if (tg) {
 
 function setWalletStatus(message) {
   document.getElementById("wallet-status").textContent = message;
+}
+
+function showClaimStatus() {
+  alert("Daily claims are not active yet. The 100-point reward will be available after BilbyCoin connects a rewarded-ad provider and verifies completed ads on the server. No points have been added.");
 }
 
 function showSection(name) {
