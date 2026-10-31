@@ -1,9 +1,17 @@
+
 import crypto from "node:crypto";
+
+const MAX_AUTH_AGE_SECONDS = 10 * 60;
 
 export function verifyTelegramData(initData) {
   const token = process.env.BOT_TOKEN;
 
-  if (!token || typeof initData !== "string" || !initData) {
+  if (
+    !token ||
+    typeof initData !== "string" ||
+    !initData ||
+    initData.length > 10000
+  ) {
     return null;
   }
 
@@ -20,12 +28,16 @@ export function verifyTelegramData(initData) {
     }
 
     const receivedHash = data.hash;
-    if (!receivedHash || !/^[a-f0-9]{64}$/i.test(receivedHash)) {
+
+    if (
+      !receivedHash ||
+      !/^[a-f0-9]{64}$/i.test(receivedHash)
+    ) {
       return null;
     }
 
     delete data.hash;
-    data.signature && delete data.signature;
+    delete data.signature;
 
     const checkString = Object.keys(data)
       .sort()
@@ -56,19 +68,24 @@ export function verifyTelegramData(initData) {
 
     if (
       !Number.isSafeInteger(authDate) ||
+      authDate <= 0 ||
       authDate > now + 60 ||
-      now - authDate > 86400
+      now - authDate > MAX_AUTH_AGE_SECONDS
     ) {
       return null;
     }
 
     const user = JSON.parse(data.user || "{}");
 
-    if (!Number.isSafeInteger(user.id) || user.id <= 0) {
+    if (
+      !Number.isSafeInteger(user.id) ||
+      user.id <= 0
+    ) {
       return null;
     }
 
     return user;
+
   } catch {
     return null;
   }
