@@ -1,6 +1,5 @@
 import express from "express";
 import cors from "cors";
-import pg from "pg";
 import tonProofRoutes from "./routes.js";
 
 const app = express();
@@ -9,20 +8,16 @@ app.use(express.json({ limit: "100kb" }));
 
 app.use(cors({
   origin: "https://bilbycoin.github.io",
-  credentials: true
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type"]
 }));
-
-export const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
 
 app.get("/", (req, res) => {
   res.json({
     service: "BilbyCoin TON verifier",
     status: "running",
     network: "TON Testnet",
-    verification: "not yet enabled"
+    verification: "not enabled"
   });
 });
 
