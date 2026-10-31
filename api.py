@@ -1,20 +1,14 @@
 import os
 import json
-import time
 import hmac
 import hashlib
-import sqlite3
+import time
 from urllib.parse import parse_qsl
-from flask import Flask, jsonify, request
+
+import psycopg
+from flask import Flask, request, jsonify
 
 app = Flask(__name__)
-DB_FILE = "bilbycoin.db"
-
-
-def get_db():
-    db = sqlite3.connect(DB_FILE)
-    db.row_factory = sqlite3.Row
-    return db
 
 
 def verify_telegram_data(init_data):
@@ -24,12 +18,13 @@ def verify_telegram_data(init_data):
 
     try:
         pairs = parse_qsl(init_data, keep_blank_values=True)
-        data = dict(pairs)
 
-        if len(data) != len(pairs):
+        if len(dict(pairs)) != len(pairs):
             return None
 
+        data = dict(pairs)
         received_hash = data.pop("hash", None)
+
         if not received_hash:
             return None
 
@@ -41,21 +36,22 @@ def verify_telegram_data(init_data):
             b"WebAppData", token.encode(), hashlib.sha256
         ).digest()
 
-        calculated = hmac.new(
+        calculated_hash = hmac.new(
             secret, check_string.encode(), hashlib.sha256
         ).hexdigest()
 
-        if not hmac.compare_digest(calculated, received_hash):
+        if not hmac.compare_digest(calculated_hash, received_hash):
             return None
 
         auth_date = int(data.get("auth_date", 0))
-        if auth_date > time.time() + 60 or time.time() - auth_date > 86400:
+
+        if time.time() - auth_date > 86400 or auth_date > time.time() + 60:
             return None
 
-        user = json.loads(data.get("user", "{}"))
-        return user if user.get("id") else None
+        user = json.loads(data["user"])
+        return user
 
-    except (ValueError, TypeError, json.JSONDecodeError):
+    except Exception:
         return None
 
 
@@ -72,25 +68,47 @@ def wallet():
     if not user:
         return jsonify({"error": "Invalid Telegram verification"}), 401
 
-    with get_db() as db:
-        account = db.execute(
-            """
-            SELECT user_id, username, balance,
-                   daily_points, referral_points
-            FROM users WHERE user_id = ?
-            """,
-            (user["id"],)
-        ).fetchone()
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        return jsonify({"error": "Database not configured"}), 500
 
-    if account is None:
-        return jsonify({"error": "User not found"}), 404
+    try:
+        with psycopg.connect(database_url, sslmode="require") as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO public.users (user_id, username)
+                    VALUES (%s, %s)
+                    ON CONFLICT (user_id) DO NOTHING
+                    """,
+                    (user["id"], user.get("username"))
+                )
 
-    return jsonify(dict(account))
+                cur.execute(
+                    """
+                    SELECT user_id, username, balance, daily_points,
+                           daily_date, referral_points
+                    FROM public.users
+                    WHERE user_id = %s
+                    """,
+                    (user["id"],)
+                )
+
+                row = cur.fetchone()
+
+        return jsonify({
+            "user_id": row[0],
+            "username": row[1],
+            "balance": row[2],
+            "daily_points": row[3],
+            "daily_date": str(row[4]) if row[4] else None,
+            "referral_points": row[5]
+        })
+
+    except Exception:
+        app.logger.exception("Wallet database error")
+        return jsonify({"error": "Database connection failed"}), 500
 
 
 if __name__ == "__main__":
-    app.run(
-        host="0.0.0.0",
-        port=int(os.environ.get("PORT", 5000)),
-        debug=False
-    )
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
