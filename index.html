@@ -1,26 +1,267 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BilbyCoin</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#080b18;color:white;font-family:Arial,sans-serif}
+.app{max-width:440px;margin:auto;padding:22px 18px 35px}
+header{text-align:center;color:#eac45c;font-weight:bold;letter-spacing:3px}
+.logo{margin:25px auto 12px;width:120px;height:120px;border:3px solid #e8bd4c;border-radius:50%;display:grid;place-items:center;font-size:65px;background:linear-gradient(145deg,#29213c,#111629);box-shadow:0 0 30px #b18a3444}
+h1{text-align:center;color:#f5cf69;margin:10px 0 5px}
+.tag{text-align:center;color:#a8a9bd;font-size:12px;letter-spacing:2px}
+.balance{margin-top:28px;padding:22px;border:1px solid #b18a4a;border-radius:18px;background:linear-gradient(135deg,#202039,#111629)}
+.small{color:#b9b9c9;font-size:13px}
+.amount{font-size:32px;color:#f5cf69;font-weight:bold;margin:10px 0}
+.stats{display:flex;justify-content:space-between;gap:10px;margin-top:20px}
+.stat{background:#ffffff0d;padding:12px;border-radius:12px;flex:1}
+.stat strong{display:block;color:#f5cf69;margin-top:8px}
+h3{color:#eac45c;margin:28px 0 14px}
+.menu{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.item{background:#171b30;border:1px solid #34334b;border-radius:14px;padding:20px 5px;text-align:center;color:white;font-size:14px;cursor:pointer}
+.item span{display:block;font-size:25px;margin-bottom:9px}
+.item:active,.action:active{background:#34304b}
+footer{text-align:center;color:#77798f;font-size:12px;margin-top:28px}
+.page{display:none;margin-top:25px;background:#171b30;border:1px solid #34334b;border-radius:16px;padding:20px;min-height:250px}
+.page h2{color:#f5cf69;margin-top:0}
+.back{background:#29213c;border:1px solid #b18a4a;color:#f5cf69;padding:11px 16px;border-radius:10px;margin-bottom:18px;cursor:pointer}
+.info{color:#c4c4d2;line-height:1.7;font-size:14px}
+.value{color:#f5cf69;font-weight:bold}
+.refbox{background:#080b18;border:1px solid #b18a4a;border-radius:12px;padding:14px;overflow-wrap:anywhere;color:#f5cf69;font-size:13px;line-height:1.6;margin:15px 0}
+.action{width:100%;padding:13px;border:1px solid #b18a4a;border-radius:10px;background:#29213c;color:#f5cf69;font-size:15px;font-weight:bold;margin:7px 0;cursor:pointer}
+.notice{font-size:12px;color:#9d9db0;line-height:1.6;margin-top:14px}
+</style>
+</head>
+<body>
+<div class="app">
+<header>BILBYCOIN</header>
+
+<div id="home">
+<div class="logo">🐾</div>
+<h1>BilbyCoin</h1>
+<div class="tag">CLAIM • REFER • GROW</div>
+
+<div class="balance">
+<div class="small">TOTAL ACCUMULATED BALANCE</div>
+<div class="amount" id="balance">Loading...</div>
+<div class="stats">
+<div class="stat">
+<div class="small">Today's Points</div>
+<strong id="daily">0</strong>
+</div>
+<div class="stat">
+<div class="small">Referral Points</div>
+<strong id="referrals">0</strong>
+</div>
+</div>
+</div>
+
+<h3>Explore BilbyCoin</h3>
+<div class="menu">
+<div class="item" onclick="showSection('home')"><span>🏠</span>Home</div>
+<div class="item" onclick="showSection('tasks')"><span>🎯</span>Tasks</div>
+<div class="item" onclick="showSection('invite')"><span>👥</span>Invite</div>
+<div class="item" onclick="showSection('history')"><span>📜</span>History</div>
+<div class="item" onclick="showSection('wallet')"><span>👛</span>Wallet</div>
+<div class="item" onclick="showSection('airdrops')"><span>🪂</span>Airdrops</div>
+</div>
+</div>
+
 <div class="page" id="tasks">
 <button class="back" onclick="showSection('home')">← Back to Home</button>
-<h2>🎯 Tasks & Earn</h2>
-<p class="info">🚀 Exciting opportunities are coming to BilbyCoin!</p>
-<p class="info">We are preparing task campaigns with advertising partners and Telegram bots.</p>
-<p class="info">Complete eligible activities and discover new opportunities.</p>
-<p class="info">🔥 Stay active. New tasks will be announced here!</p>
+<h2>🎯 Tasks & Rewards</h2>
+<p class="info">Welcome to BilbyCoin Tasks!</p>
+<p class="info">Discover exciting opportunities from our future advertising partners and Telegram bot partners.</p>
+<p class="info">New campaigns and eligible activities will appear here when partnerships are available.</p>
+<p class="info">🔥 Stay connected. New opportunities are coming!</p>
 </div>
 
 <div class="page" id="invite">
 <button class="back" onclick="showSection('home')">← Back to Home</button>
 <h2>👥 Invite Friends</h2>
-<p class="info">🌍 Help BilbyCoin grow!</p>
-<p class="info">We are preparing our referral programme and exciting community rewards.</p>
-<p class="info">Invite opportunities will be activated when the programme launches.</p>
-<p class="info">🔥 Build your network and stay tuned!</p>
+<p class="info">🚀 Invite friends and help grow the BilbyCoin community!</p>
+
+<p class="info"><b>Your personal referral link:</b></p>
+<div class="refbox" id="refLink">Opening inside Telegram...</div>
+
+<button class="action" onclick="copyReferral()">📋 Copy Referral Link</button>
+<button class="action" onclick="shareReferral()">📤 Share with Friends</button>
+
+<h3>🏆 Referral Rewards</h3>
+<p class="info">🥇 Level 1 — <span class="value">100 points</span></p>
+<p class="info">🥈 Level 2 — <span class="value">50 points</span></p>
+<p class="info">🥉 Level 3 — <span class="value">200 points</span></p>
+
+<p class="info">🎁 Total: 350 points distributed across three levels for each eligible new user.</p>
+<p class="notice">Each valid new user generates referral rewards only once. Self-referrals and duplicate referrals are not allowed. Rewards are subject to server verification.</p>
+</div>
+
+<div class="page" id="history">
+<button class="back" onclick="showSection('home')">← Back to Home</button>
+<h2>📜 Transaction History</h2>
+<p class="info" id="historyText">Your points transaction history will appear here when the history service is connected.</p>
+</div>
+
+<div class="page" id="wallet">
+<button class="back" onclick="showSection('home')">← Back to Home</button>
+<h2>👛 My Wallet</h2>
+<p class="info">Total balance: <span class="value" id="walletBalance">Loading...</span></p>
+<p class="info">Today's points: <span class="value" id="walletDaily">0</span></p>
+<p class="info">Referral points: <span class="value" id="walletReferral">0</span></p>
+<p class="notice">BilbyCoin points are virtual community points and currently have no cash value. They cannot be transferred or sold.</p>
 </div>
 
 <div class="page" id="airdrops">
 <button class="back" onclick="showSection('home')">← Back to Home</button>
-<h2>🪂 Airdrop Zone</h2>
-<p class="info">🎁 Exciting reward opportunities are on the horizon!</p>
+<h2>🪂 BilbyCoin Airdrops</h2>
+<p class="info">🎁 Exciting reward opportunities ahead!</p>
+<p class="info">Stay active, collect BilbyCoin points and grow your community.</p>
 <p class="info">We are exploring partnerships with other projects and communities.</p>
-<p class="info">Future campaigns and eligibility details will be announced here.</p>
-<p class="info">🚀 Stay connected with BilbyCoin!</p>
+<p class="info">🚀 Keep an eye on official BilbyCoin announcements for future reward campaigns.</p>
+<p class="notice">Any future campaign will have its own confirmed eligibility rules.</p>
 </div>
+
+<footer>BilbyCoin • Claim • Refer • Grow</footer>
+</div>
+
+<script>
+const tg = window.Telegram && window.Telegram.WebApp;
+const BOT_USERNAME = "Bilbycoinrewardsbot";
+let referralLink = "";
+
+if(tg){
+  tg.ready();
+  tg.expand();
+}
+
+function showSection(name){
+  document.getElementById("home").style.display =
+    name === "home" ? "block" : "none";
+
+  document.querySelectorAll(".page").forEach(page=>{
+    page.style.display = "none";
+  });
+
+  if(name !== "home"){
+    const selected = document.getElementById(name);
+    if(selected) selected.style.display = "block";
+  }
+
+  if(name === "wallet") loadWallet();
+}
+
+function setupReferral(){
+  const user = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+
+  if(!user || !user.id){
+    document.getElementById("refLink").textContent =
+      "Please open BilbyCoin inside Telegram to generate your personal link.";
+    return;
+  }
+
+  referralLink =
+    "https://t.me/" + BOT_USERNAME + "?start=" + user.id;
+
+  document.getElementById("refLink").textContent = referralLink;
+}
+
+async function copyReferral(){
+  if(!referralLink){
+    alert("Open BilbyCoin inside Telegram first.");
+    return;
+  }
+
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      await navigator.clipboard.writeText(referralLink);
+    }else{
+      const input = document.createElement("textarea");
+      input.value = referralLink;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      input.remove();
+    }
+    alert("Referral link copied!");
+  }catch(error){
+    alert("Could not copy. Please copy the link manually.");
+  }
+}
+
+function shareReferral(){
+  if(!referralLink){
+    alert("Open BilbyCoin inside Telegram first.");
+    return;
+  }
+
+  const message =
+    "🚀 Join BilbyCoin! Claim, refer and grow with our community.";
+
+  const shareUrl =
+    "https://t.me/share/url?url=" +
+    encodeURIComponent(referralLink) +
+    "&text=" + encodeURIComponent(message);
+
+  if(tg){
+    tg.openTelegramLink(shareUrl);
+  }else{
+    window.open(shareUrl,"_blank");
+  }
+}
+
+async function loadWallet(){
+  if(!tg || !tg.initData){
+    document.getElementById("balance").textContent =
+      "Open inside Telegram";
+    document.getElementById("walletBalance").textContent =
+      "Open inside Telegram";
+    return;
+  }
+
+  try{
+    const response = await fetch(
+      "https://bilbycoin-api.onrender.com/api/wallet",
+      {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({initData:tg.initData})
+      }
+    );
+
+    if(!response.ok) throw new Error("Wallet request failed");
+
+    const data = await response.json();
+
+    const total = data.balance ?? 0;
+    const daily = data.daily_points ?? 0;
+    const referral = data.referral_points ?? 0;
+
+    document.getElementById("balance").textContent =
+      total + " BILBY";
+
+    document.getElementById("walletBalance").textContent =
+      total + " points";
+
+    document.getElementById("daily").textContent = daily;
+    document.getElementById("walletDaily").textContent = daily;
+
+    document.getElementById("referrals").textContent = referral;
+    document.getElementById("walletReferral").textContent = referral;
+
+  }catch(error){
+    document.getElementById("balance").textContent =
+      "Could not load";
+    document.getElementById("walletBalance").textContent =
+      "Could not load";
+  }
+}
+
+setupReferral();
+loadWallet();
+</script>
+</body>
+</html>
