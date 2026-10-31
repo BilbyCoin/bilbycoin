@@ -74,7 +74,6 @@ router.post("/payload", async (req, res) => {
   }
 });
 
-
 router.post("/verify", async (req, res) => {
   const user = verifyTelegramData(req.body?.initData);
 
@@ -198,7 +197,7 @@ router.post("/verify", async (req, res) => {
 
       return res.status(409).json({
         verified: false,
-        error: "This wallet is already linked to another account or a different wallet is linked to your account."
+        error: "A different wallet is already linked to your account."
       });
     }
 
@@ -220,9 +219,20 @@ router.post("/verify", async (req, res) => {
   } catch (error) {
     if (client && transactionStarted) {
       await client.query("ROLLBACK").catch(() => {});
+      transactionStarted = false;
     }
 
     console.error("Wallet verification error:", error.message);
+
+    if (
+      error.code === "23505" &&
+      error.constraint === "users_wallet_address_unique"
+    ) {
+      return res.status(409).json({
+        verified: false,
+        error: "This wallet is already linked to another account."
+      });
+    }
 
     return res.status(500).json({
       verified: false,
