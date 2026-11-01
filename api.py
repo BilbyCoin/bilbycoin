@@ -490,7 +490,7 @@ def offerwall_link():
 
     user_id = str(user["id"])
     expires = str(int(time.time()) + 3600)
-    message = f"offerwall-user-v1\\n{public_key}\\n{user_id}\\n{expires}"
+    message = f"offerwall-user-v1\n{public_key}\n{user_id}\n{expires}"
     signature = hmac.new(
         private_secret.encode("utf-8"),
         message.encode("utf-8"),
