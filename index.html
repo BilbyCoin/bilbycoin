@@ -94,6 +94,8 @@ alt="BilbyCoin logo">
 <p class="info">Welcome to BilbyCoin Tasks!</p>
 <p class="info">Watch an eligible advertisement to earn BilbyCoin points.</p>
 <button class="action" id="monetagButton" onclick="watchRewardedAd()">🎬 Watch Ad — Earn 50 Points</button>
+<button class="action" id="rewardsButton" onclick="openRewards()">🎁 Earn for Rewards</button>
+<p class="notice" id="rewardsStatus">Complete available activities to collect BilbyCoin points.</p>
 <p class="notice" id="monetagStatus">Up to 3 eligible paid ad views per day. Points are credited only after server verification.</p>
 <p class="info">All available tasks and reward activities will be displayed here inside the Mini App.</p>
 <p class="info">Check this page regularly for new eligible tasks and campaigns.</p>
@@ -229,6 +231,46 @@ async function watchRewardedAd() {
   } finally {
     button.disabled = false;
     button.textContent = "🎬 Watch Ad — Earn 50 Points";
+  }
+}
+
+async function openRewards() {
+  const button = document.getElementById("rewardsButton");
+  const status = document.getElementById("rewardsStatus");
+
+  if (!tg || !tg.initData) {
+    status.textContent = "Please open BilbyCoin inside Telegram to continue.";
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "⏳ Preparing...";
+  status.textContent = "Preparing your secure rewards link...";
+
+  try {
+    const response = await fetch(API_URL + "/api/offerwall-link", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({initData: tg.initData})
+    });
+    const data = await response.json();
+
+    if (!response.ok || !data.url) {
+      throw new Error(data.error || "Rewards are temporarily unavailable.");
+    }
+
+    status.textContent = "Opening available rewards...";
+    if (tg && typeof tg.openLink === "function") {
+      tg.openLink(data.url);
+    } else {
+      window.location.href = data.url;
+    }
+  } catch (error) {
+    console.error("Rewards link error:", error);
+    status.textContent = error.message || "Could not open rewards. Please try again.";
+  } finally {
+    button.disabled = false;
+    button.textContent = "🎁 Earn for Rewards";
   }
 }
 
