@@ -74,7 +74,7 @@ alt="BilbyCoin logo">
 </div>
 
 <button class="action" id="claimButton" onclick="claimDailyPoints()">🎁 Claim 100 Daily Points</button>
-<p class="notice" id="claimStatus">Claim 100 points once every 24 hours. No advertisement is required.</p>
+<p class="notice" id="claimStatus">Watch one eligible rewarded ad to claim 100 points once every 24 hours. Points require Monetag server verification.</p>
 
 <h3>Explore BilbyCoin</h3>
 
@@ -277,16 +277,17 @@ async function openRewards() {
 async function claimDailyPoints() {
   const button = document.getElementById("claimButton");
   const status = document.getElementById("claimStatus");
-
   if (!tg || !tg.initData) {
     status.textContent = "Please open BilbyCoin inside Telegram to claim points.";
     return;
   }
-
+  if (typeof window.show_12160397 !== "function") {
+    status.textContent = "The ad service is loading. Please refresh and try again.";
+    return;
+  }
   button.disabled = true;
-  button.textContent = "⏳ Processing claim...";
+  button.textContent = "⏳ Preparing ad...";
   status.textContent = "Checking your daily claim...";
-
   try {
     const response = await fetch(API_URL + "/api/claim-daily", {
       method: "POST",
@@ -294,27 +295,26 @@ async function claimDailyPoints() {
       body: JSON.stringify({initData: tg.initData})
     });
     const data = await response.json();
-
     if (!response.ok) {
-      if (data.next_claim_at) {
-        status.textContent = "You have already claimed today. Next claim: " + new Date(data.next_claim_at).toLocaleString();
-      } else {
-        status.textContent = data.error || "Claim could not be completed. Please try again later.";
-      }
+      status.textContent = data.next_claim_at
+        ? "Your next daily claim is available: " + new Date(data.next_claim_at).toLocaleString()
+        : (data.error || "Daily claim could not be started. Please try again.");
       return;
     }
-
-    status.textContent = "🎉 " + data.message;
-    await loadWallet();
+    status.textContent = "Watch the ad. Your 100 points require Monetag's paid-reward confirmation.";
+    await window.show_12160397({
+      ymid: data.ymid,
+      requestVar: "bilbycoin_daily_claim"
+    });
+    status.textContent = "Ad flow finished. Waiting for Monetag server confirmation. Points are not added without verification.";
   } catch (error) {
-    console.error("Daily claim error:", error);
-    status.textContent = "Connection problem. Please try again.";
+    console.error("Daily claim ad error:", error);
+    status.textContent = "Ad could not be completed. Points are added only if Monetag confirms a paid reward.";
   } finally {
     button.disabled = false;
     button.textContent = "🎁 Claim 100 Daily Points";
   }
 }
-
 function showSection(name) {
   document.getElementById("home").style.display =
     name === "home" ? "block" : "none";
