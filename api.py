@@ -4,6 +4,7 @@ import json
 import hmac
 import hashlib
 import time
+import uuid
 from urllib.parse import parse_qsl, quote
 
 import psycopg
@@ -157,81 +158,55 @@ def wallet():
 
 @app.route("/api/claim-daily", methods=["POST", "OPTIONS"])
 def claim_daily():
-
+    """Start a daily rewarded-ad claim; Monetag postback grants the points."""
     if request.method == "OPTIONS":
         return "", 204
-
     body = request.get_json(silent=True) or {}
     user = verify_telegram_data(body.get("initData"))
-
     if not user:
         return jsonify({"error": "Invalid Telegram verification"}), 401
-
     database_url = get_database_url()
     if not database_url:
         return jsonify({"error": "Database not configured"}), 500
-
     try:
         with psycopg.connect(database_url, sslmode="require") as conn:
             with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO public.users (user_id, username)
-                    VALUES (%s, %s)
-                    ON CONFLICT (user_id) DO NOTHING
-                    """,
-                    (user["id"], user.get("username"))
-                )
-
-                cur.execute(
-                    """
-                    INSERT INTO public.daily_claims (user_id, claimed_at)
-                    VALUES (%s, NOW())
-                    ON CONFLICT (user_id) DO UPDATE
-                    SET claimed_at = NOW()
-                    WHERE public.daily_claims.claimed_at <= NOW() - INTERVAL '24 hours'
-                    RETURNING claimed_at
-                    """,
-                    (user["id"],)
-                )
-                claim = cur.fetchone()
-
-                if not claim:
-                    cur.execute(
-                        "SELECT claimed_at FROM public.daily_claims WHERE user_id = %s",
-                        (user["id"],)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS public.daily_claim_ad_intents (
+                        ymid TEXT PRIMARY KEY,
+                        user_id BIGINT NOT NULL,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '2 hours'),
+                        credited_at TIMESTAMPTZ
                     )
-                    previous = cur.fetchone()
-                    return jsonify({
-                        "error": "You have already claimed your daily points. Please try again after 24 hours.",
-                        "next_claim_at": (previous[0] + __import__("datetime").timedelta(hours=24)).isoformat() if previous else None
-                    }), 429
-
+                """)
+                cur.execute("""
+                    INSERT INTO public.users (user_id, username)
+                    VALUES (%s, %s) ON CONFLICT (user_id) DO NOTHING
+                """, (user["id"], user.get("username")))
+                cur.execute("SELECT claimed_at FROM public.daily_claims WHERE user_id = %s", (user["id"],))
+                previous = cur.fetchone()
+                if previous:
+                    cur.execute("SELECT NOW()")
+                    now = cur.fetchone()[0]
+                    if previous[0] > now - __import__("datetime").timedelta(hours=24):
+                        return jsonify({
+                            "error": "Your daily claim is not ready yet.",
+                            "next_claim_at": (previous[0] + __import__("datetime").timedelta(hours=24)).isoformat()
+                        }), 429
+                ymid = "daily-" + uuid.uuid4().hex
                 cur.execute(
-                    """
-                    UPDATE public.users
-                    SET balance = COALESCE(balance, 0) + 100,
-                        daily_points = COALESCE(daily_points, 0) + 100,
-                        daily_date = CURRENT_DATE
-                    WHERE user_id = %s
-                    RETURNING balance, daily_points
-                    """,
-                    (user["id"],)
+                    "INSERT INTO public.daily_claim_ad_intents (ymid, user_id) VALUES (%s, %s)",
+                    (ymid, user["id"])
                 )
-                updated = cur.fetchone()
-
         return jsonify({
             "success": True,
-            "points_awarded": 100,
-            "balance": updated[0],
-            "daily_points": updated[1],
-            "message": "100 points added to your balance! Come back after 24 hours for your next claim."
+            "ymid": ymid,
+            "message": "Watch the ad. 100 points are added only after Monetag confirms a paid reward."
         })
-
     except Exception:
-        app.logger.exception("Daily claim database error")
+        app.logger.exception("Daily claim start error")
         return jsonify({"error": "Daily claim is temporarily unavailable. Please try again later."}), 500
-
 
 @app.route("/api/connect-wallet", methods=["POST", "OPTIONS"])
 def connect_wallet():
@@ -425,6 +400,43 @@ def monetag_postback():
                     (user_id,)
                 )
                 if not cur.fetchone():
+                    return "", 200
+
+                cur.execute("""
+                    SELECT user_id, expires_at, credited_at
+                    FROM public.daily_claim_ad_intents
+                    WHERE ymid = %s FOR UPDATE
+                """, (ymid,))
+                intent = cur.fetchone()
+                if intent:
+                    intent_user_id, expires_at, credited_at = intent
+                    if intent_user_id != user_id or credited_at:
+                        return "", 200
+                    cur.execute("SELECT NOW()")
+                    if expires_at <= cur.fetchone()[0]:
+                        return "", 200
+                    cur.execute("""
+                        INSERT INTO public.daily_claims (user_id, claimed_at)
+                        VALUES (%s, NOW())
+                        ON CONFLICT (user_id) DO UPDATE
+                        SET claimed_at = NOW()
+                        WHERE public.daily_claims.claimed_at <= NOW() - INTERVAL '24 hours'
+                        RETURNING claimed_at
+                    """, (user_id,))
+                    if not cur.fetchone():
+                        return "", 200
+                    cur.execute("""
+                        UPDATE public.users
+                        SET balance = COALESCE(balance, 0) + 100,
+                            daily_points = COALESCE(daily_points, 0) + 100,
+                            daily_date = CURRENT_DATE
+                        WHERE user_id = %s
+                    """, (user_id,))
+                    cur.execute("""
+                        UPDATE public.daily_claim_ad_intents
+                        SET credited_at = NOW()
+                        WHERE ymid = %s AND credited_at IS NULL
+                    """, (ymid,))
                     return "", 200
 
                 cur.execute(
