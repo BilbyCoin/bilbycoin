@@ -471,6 +471,126 @@ def monetag_postback():
         return "", 500
 
 
+@app.route("/api/offerwall-postback", methods=["POST"])
+def offerwall_postback():
+    """Credit or reverse Offerwall.me rewards using its signed server callback."""
+    from decimal import Decimal, InvalidOperation
+
+    secret = os.getenv("OFFERWALL_PRIVATE_SECRET", "")
+    if not secret:
+        app.logger.error("Offerwall postback secret is not configured")
+        return "not configured", 500
+
+    # Offerwall.me sends form-encoded POST fields.
+    sub_id = request.form.get("subId", "").strip()
+    trans_id = request.form.get("transId", "").strip()
+    reward_text = request.form.get("reward", "").strip()
+    status_text = request.form.get("status", "").strip()
+    supplied_signature = request.form.get("signature", "").strip()
+
+    if not all([sub_id, trans_id, reward_text, status_text, supplied_signature]):
+        return "missing parameters", 400
+
+    expected_signature = hashlib.md5(
+        (sub_id + trans_id + reward_text + secret).encode("utf-8")
+    ).hexdigest()
+
+    if not hmac.compare_digest(expected_signature.lower(), supplied_signature.lower()):
+        app.logger.warning("Offerwall postback rejected: invalid signature")
+        return "invalid signature", 403
+
+    try:
+        user_id = int(sub_id)
+        reward_decimal = Decimal(reward_text)
+        status = int(status_text)
+        if user_id <= 0 or not reward_decimal.is_finite() or reward_decimal <= 0:
+            return "invalid reward or user", 400
+        if reward_decimal != reward_decimal.to_integral_value():
+            return "reward must be a whole number of points", 400
+        reward = int(reward_decimal)
+        if reward > 10000000 or status not in (1, 2) or len(trans_id) > 200:
+            return "invalid transaction", 400
+    except (ValueError, InvalidOperation):
+        return "invalid parameters", 400
+
+    database_url = get_database_url()
+    if not database_url:
+        return "database not configured", 500
+
+    try:
+        with psycopg.connect(database_url, sslmode="require") as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS public.offerwall_events (
+                        trans_id TEXT PRIMARY KEY,
+                        user_id BIGINT NOT NULL,
+                        reward_points BIGINT NOT NULL,
+                        event_status SMALLINT NOT NULL,
+                        offer_name TEXT,
+                        offer_type TEXT,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                """)
+
+                cur.execute(
+                    "SELECT 1 FROM public.users WHERE user_id = %s",
+                    (user_id,)
+                )
+                if not cur.fetchone():
+                    # A callback for an unknown account must not create or credit it.
+                    return "unknown user", 200
+
+                cur.execute(
+                    "SELECT user_id, reward_points, event_status "
+                    "FROM public.offerwall_events WHERE trans_id = %s FOR UPDATE",
+                    (trans_id,)
+                )
+                existing = cur.fetchone()
+
+                if not existing:
+                    cur.execute("""
+                        INSERT INTO public.offerwall_events
+                            (trans_id, user_id, reward_points, event_status,
+                             offer_name, offer_type)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                    """, (
+                        trans_id, user_id, reward, status,
+                        request.form.get("offer_name", "")[:500],
+                        request.form.get("offer_type", "")[:100]
+                    ))
+                    if status == 1:
+                        cur.execute("""
+                            UPDATE public.users
+                            SET balance = COALESCE(balance, 0) + %s
+                            WHERE user_id = %s
+                        """, (reward, user_id))
+
+                else:
+                    old_user_id, old_reward, old_status = existing
+                    if old_user_id != user_id or old_reward != reward:
+                        app.logger.error("Offerwall transaction data mismatch: %s", trans_id)
+                        return "transaction mismatch", 409
+
+                    # Apply a reversal only once; never re-credit a reversed transaction.
+                    if old_status == 1 and status == 2:
+                        cur.execute("""
+                            UPDATE public.users
+                            SET balance = GREATEST(COALESCE(balance, 0) - %s, 0)
+                            WHERE user_id = %s
+                        """, (reward, user_id))
+                        cur.execute("""
+                            UPDATE public.offerwall_events
+                            SET event_status = 2, updated_at = NOW()
+                            WHERE trans_id = %s
+                        """, (trans_id,))
+                return "ok", 200
+
+    except Exception:
+        app.logger.exception("Offerwall postback processing failed")
+        return "temporary error", 500
+
+
 if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
