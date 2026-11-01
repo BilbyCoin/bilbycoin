@@ -4,7 +4,7 @@ import json
 import hmac
 import hashlib
 import time
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, quote
 
 import psycopg
 from flask import Flask, request, jsonify
@@ -469,6 +469,40 @@ def monetag_postback():
     except Exception:
         app.logger.exception("Monetag postback processing failed")
         return "", 500
+
+
+@app.route("/api/offerwall-link", methods=["POST", "OPTIONS"])
+def offerwall_link():
+    """Create a short-lived signed Offerwall URL for the verified Telegram user."""
+    if request.method == "OPTIONS":
+        return "", 204
+
+    body = request.get_json(silent=True) or {}
+    user = verify_telegram_data(body.get("initData"))
+    if not user:
+        return jsonify({"error": "Invalid Telegram verification"}), 401
+
+    public_key = os.getenv("OFFERWALL_PUBLIC_KEY", "").strip()
+    private_secret = os.getenv("OFFERWALL_PRIVATE_SECRET", "")
+    if not public_key or not private_secret:
+        app.logger.error("Offerwall credentials are not fully configured")
+        return jsonify({"error": "Offerwall is not configured"}), 503
+
+    user_id = str(user["id"])
+    expires = str(int(time.time()) + 3600)
+    message = f"offerwall-user-v1\\n{public_key}\\n{user_id}\\n{expires}"
+    signature = hmac.new(
+        private_secret.encode("utf-8"),
+        message.encode("utf-8"),
+        hashlib.sha256
+    ).hexdigest()
+
+    signed_url = (
+        f"https://offerwall.me/offerwall/{quote(public_key, safe='')}/"
+        f"{quote(user_id, safe='')}?identityExpires={expires}"
+        f"&identitySignature={signature}"
+    )
+    return jsonify({"url": signed_url, "expires": expires})
 
 
 @app.route("/api/offerwall-postback", methods=["POST"])
